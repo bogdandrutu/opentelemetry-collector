@@ -58,6 +58,13 @@ func ParserFromViper(v *viper.Viper) *Parser {
 	return &Parser{v: v}
 }
 
+func NewParserFromStringMap(data map[string]interface{}) *Parser {
+	v := NewViper()
+	// Cannot return error because the subv is empty.
+	_ = v.MergeConfigMap(cast.ToStringMap(data))
+	return ParserFromViper(v)
+}
+
 // Parser loads configuration.
 type Parser struct {
 	v *viper.Viper

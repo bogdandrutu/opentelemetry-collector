@@ -19,10 +19,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/config/configmodels"
 )
 
@@ -74,7 +74,7 @@ func createExtension(context.Context, component.ExtensionCreateParams, configmod
 	return nopExtensionInstance, nil
 }
 
-func customUnmarshaler(*viper.Viper, interface{}) error {
+func customUnmarshaler(*config.Parser, interface{}) error {
 	return errors.New("my error")
 }
 
