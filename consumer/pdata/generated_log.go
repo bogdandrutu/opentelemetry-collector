@@ -63,18 +63,6 @@ func (es ResourceLogsSlice) At(ix int) ResourceLogs {
 	return newResourceLogs((*es.orig)[ix])
 }
 
-// MoveAndAppendTo moves all elements from the current slice and appends them to the dest.
-// The current slice will be cleared.
-func (es ResourceLogsSlice) MoveAndAppendTo(dest ResourceLogsSlice) {
-	if *dest.orig == nil {
-		// We can simply move the entire vector and avoid any allocations.
-		*dest.orig = *es.orig
-	} else {
-		*dest.orig = append(*dest.orig, *es.orig...)
-	}
-	*es.orig = nil
-}
-
 // CopyTo copies all elements from the current slice to the dest.
 func (es ResourceLogsSlice) CopyTo(dest ResourceLogsSlice) {
 	srcLen := es.Len()
@@ -141,6 +129,37 @@ func (es ResourceLogsSlice) Append(e ResourceLogs) {
 func (es ResourceLogsSlice) AppendEmpty() ResourceLogs {
 	*es.orig = append(*es.orig, &otlplogs.ResourceLogs{})
 	return es.At(es.Len() - 1)
+}
+
+// MoveAndAppendTo moves all elements from the current slice and appends them to the dest.
+// The current slice will be cleared.
+func (es ResourceLogsSlice) MoveAndAppendTo(dest ResourceLogsSlice) {
+	if *dest.orig == nil {
+		// We can simply move the entire vector and avoid any allocations.
+		*dest.orig = *es.orig
+	} else {
+		*dest.orig = append(*dest.orig, *es.orig...)
+	}
+	*es.orig = nil
+}
+
+// Filter calls f sequentially for each element present in the slice.
+// If f returns true, filter deletes the given element from the slice.
+func (es ResourceLogsSlice) Filter(f func(ResourceLogs) bool) {
+	newPos := 0
+	for i := 0; i < len(*es.orig); i++ {
+		if f(es.At(i)) {
+			continue
+		}
+		if newPos == i {
+			// Nothing to move, element is at the right place.
+			newPos++
+			continue
+		}
+		(*es.orig)[newPos] = (*es.orig)[i]
+		newPos++
+	}
+	*es.orig = (*es.orig)[:newPos]
 }
 
 // ResourceLogs is a collection of logs from a Resource.
@@ -223,18 +242,6 @@ func (es InstrumentationLibraryLogsSlice) At(ix int) InstrumentationLibraryLogs 
 	return newInstrumentationLibraryLogs((*es.orig)[ix])
 }
 
-// MoveAndAppendTo moves all elements from the current slice and appends them to the dest.
-// The current slice will be cleared.
-func (es InstrumentationLibraryLogsSlice) MoveAndAppendTo(dest InstrumentationLibraryLogsSlice) {
-	if *dest.orig == nil {
-		// We can simply move the entire vector and avoid any allocations.
-		*dest.orig = *es.orig
-	} else {
-		*dest.orig = append(*dest.orig, *es.orig...)
-	}
-	*es.orig = nil
-}
-
 // CopyTo copies all elements from the current slice to the dest.
 func (es InstrumentationLibraryLogsSlice) CopyTo(dest InstrumentationLibraryLogsSlice) {
 	srcLen := es.Len()
@@ -301,6 +308,37 @@ func (es InstrumentationLibraryLogsSlice) Append(e InstrumentationLibraryLogs) {
 func (es InstrumentationLibraryLogsSlice) AppendEmpty() InstrumentationLibraryLogs {
 	*es.orig = append(*es.orig, &otlplogs.InstrumentationLibraryLogs{})
 	return es.At(es.Len() - 1)
+}
+
+// MoveAndAppendTo moves all elements from the current slice and appends them to the dest.
+// The current slice will be cleared.
+func (es InstrumentationLibraryLogsSlice) MoveAndAppendTo(dest InstrumentationLibraryLogsSlice) {
+	if *dest.orig == nil {
+		// We can simply move the entire vector and avoid any allocations.
+		*dest.orig = *es.orig
+	} else {
+		*dest.orig = append(*dest.orig, *es.orig...)
+	}
+	*es.orig = nil
+}
+
+// Filter calls f sequentially for each element present in the slice.
+// If f returns true, filter deletes the given element from the slice.
+func (es InstrumentationLibraryLogsSlice) Filter(f func(InstrumentationLibraryLogs) bool) {
+	newPos := 0
+	for i := 0; i < len(*es.orig); i++ {
+		if f(es.At(i)) {
+			continue
+		}
+		if newPos == i {
+			// Nothing to move, element is at the right place.
+			newPos++
+			continue
+		}
+		(*es.orig)[newPos] = (*es.orig)[i]
+		newPos++
+	}
+	*es.orig = (*es.orig)[:newPos]
 }
 
 // InstrumentationLibraryLogs is a collection of logs from a LibraryInstrumentation.
@@ -383,18 +421,6 @@ func (es LogSlice) At(ix int) LogRecord {
 	return newLogRecord((*es.orig)[ix])
 }
 
-// MoveAndAppendTo moves all elements from the current slice and appends them to the dest.
-// The current slice will be cleared.
-func (es LogSlice) MoveAndAppendTo(dest LogSlice) {
-	if *dest.orig == nil {
-		// We can simply move the entire vector and avoid any allocations.
-		*dest.orig = *es.orig
-	} else {
-		*dest.orig = append(*dest.orig, *es.orig...)
-	}
-	*es.orig = nil
-}
-
 // CopyTo copies all elements from the current slice to the dest.
 func (es LogSlice) CopyTo(dest LogSlice) {
 	srcLen := es.Len()
@@ -461,6 +487,37 @@ func (es LogSlice) Append(e LogRecord) {
 func (es LogSlice) AppendEmpty() LogRecord {
 	*es.orig = append(*es.orig, &otlplogs.LogRecord{})
 	return es.At(es.Len() - 1)
+}
+
+// MoveAndAppendTo moves all elements from the current slice and appends them to the dest.
+// The current slice will be cleared.
+func (es LogSlice) MoveAndAppendTo(dest LogSlice) {
+	if *dest.orig == nil {
+		// We can simply move the entire vector and avoid any allocations.
+		*dest.orig = *es.orig
+	} else {
+		*dest.orig = append(*dest.orig, *es.orig...)
+	}
+	*es.orig = nil
+}
+
+// Filter calls f sequentially for each element present in the slice.
+// If f returns true, filter deletes the given element from the slice.
+func (es LogSlice) Filter(f func(LogRecord) bool) {
+	newPos := 0
+	for i := 0; i < len(*es.orig); i++ {
+		if f(es.At(i)) {
+			continue
+		}
+		if newPos == i {
+			// Nothing to move, element is at the right place.
+			newPos++
+			continue
+		}
+		(*es.orig)[newPos] = (*es.orig)[i]
+		newPos++
+	}
+	*es.orig = (*es.orig)[:newPos]
 }
 
 // LogRecord are experimental implementation of OpenTelemetry Log Data Model.
