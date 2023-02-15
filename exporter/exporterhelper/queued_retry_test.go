@@ -42,7 +42,7 @@ import (
 )
 
 func mockRequestUnmarshaler(mr *mockRequest) internal.RequestUnmarshaler {
-	return func(bytes []byte) (internal.Request, error) {
+	return func(bytes []byte) (Request, error) {
 		return mr, nil
 	}
 }
@@ -635,7 +635,7 @@ func (mer *mockErrorRequest) Export(_ context.Context) error {
 	return errors.New("transient error")
 }
 
-func (mer *mockErrorRequest) OnError(error) internal.Request {
+func (mer *mockErrorRequest) OnError(error) Request {
 	return mer
 }
 
@@ -647,7 +647,7 @@ func (mer *mockErrorRequest) Count() int {
 	return 7
 }
 
-func newErrorRequest(ctx context.Context) internal.Request {
+func newErrorRequest(ctx context.Context) Request {
 	return &mockErrorRequest{
 		baseRequest: baseRequest{ctx: ctx},
 	}
@@ -679,7 +679,7 @@ func (m *mockRequest) Marshal() ([]byte, error) {
 	return marshaler.MarshalTraces(ptrace.NewTraces())
 }
 
-func (m *mockRequest) OnError(error) internal.Request {
+func (m *mockRequest) OnError(error) Request {
 	return &mockRequest{
 		baseRequest:  m.baseRequest,
 		cnt:          1,
@@ -723,7 +723,7 @@ func newObservabilityConsumerSender(nextSender requestSender) *observabilityCons
 	}
 }
 
-func (ocs *observabilityConsumerSender) send(req internal.Request) error {
+func (ocs *observabilityConsumerSender) send(req Request) error {
 	err := ocs.nextSender.send(req)
 	if err != nil {
 		ocs.droppedItemsCount.Add(int64(req.Count()))
@@ -827,7 +827,7 @@ type producerConsumerQueueWithCounter struct {
 	produceCounter *atomic.Uint32
 }
 
-func (pcq *producerConsumerQueueWithCounter) Produce(item internal.Request) bool {
+func (pcq *producerConsumerQueueWithCounter) Produce(item Request) bool {
 	pcq.produceCounter.Add(1)
 	return pcq.ProducerConsumerQueue.Produce(item)
 }
@@ -836,6 +836,6 @@ type errorRequestSender struct {
 	errToReturn error
 }
 
-func (rs *errorRequestSender) send(_ internal.Request) error {
+func (rs *errorRequestSender) send(_ Request) error {
 	return rs.errToReturn
 }

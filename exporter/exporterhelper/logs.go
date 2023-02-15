@@ -22,7 +22,6 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/exporter"
-	"go.opentelemetry.io/collector/exporter/exporterhelper/internal"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
@@ -30,30 +29,32 @@ var logsMarshaler = &plog.ProtoMarshaler{}
 var logsUnmarshaler = &plog.ProtoUnmarshaler{}
 
 type logsRequest struct {
-	baseRequest
-	ld     plog.Logs
+	baseRequest[plog.Logs]
+}
+
+func newLogsRequest(ctx context.Context, ld plog.Logs, pusher consumer.ConsumeLogsFunc) Request {
+	return &logsRequest{
+		baseRequest: baseRequest[plog.Logs]{ctx: ctx, data: ld, pusher: pusher},
+	}
+}
+
+type logsRequestMarshaler struct {
 	pusher consumer.ConsumeLogsFunc
 }
 
-func newLogsRequest(ctx context.Context, ld plog.Logs, pusher consumer.ConsumeLogsFunc) internal.Request {
-	return &logsRequest{
-		baseRequest: baseRequest{ctx: ctx},
-		ld:          ld,
-		pusher:      pusher,
-	}
+func (lrm logsRequestMarshaler) Marshal(req Request) ([]byte, error) {
+	return logsMarshaler.MarshalLogs(req.(*logsRequest).data)
 }
 
-func newLogsRequestUnmarshalerFunc(pusher consumer.ConsumeLogsFunc) internal.RequestUnmarshaler {
-	return func(bytes []byte) (internal.Request, error) {
-		logs, err := logsUnmarshaler.UnmarshalLogs(bytes)
-		if err != nil {
-			return nil, err
-		}
-		return newLogsRequest(context.Background(), logs, pusher), nil
+func (lrm logsRequestMarshaler) Unmarshal(bytes []byte) (Request, error) {
+	logs, err := logsUnmarshaler.UnmarshalLogs(bytes)
+	if err != nil {
+		return nil, err
 	}
+	return newLogsRequest(context.Background(), logs, lrm.pusher), nil
 }
 
-func (req *logsRequest) OnError(err error) internal.Request {
+func (req *logsRequest) OnError(err error) Request {
 	var logError consumererror.Logs
 	if errors.As(err, &logError) {
 		return newLogsRequest(req.ctx, logError.GetLogs(), req.pusher)
@@ -61,16 +62,12 @@ func (req *logsRequest) OnError(err error) internal.Request {
 	return req
 }
 
-func (req *logsRequest) Export(ctx context.Context) error {
-	return req.pusher(ctx, req.ld)
-}
-
 func (req *logsRequest) Marshal() ([]byte, error) {
-	return logsMarshaler.MarshalLogs(req.ld)
+	return logsMarshaler.MarshalLogs(req.data)
 }
 
 func (req *logsRequest) Count() int {
-	return req.ld.LogRecordCount()
+	return req.data.LogRecordCount()
 }
 
 type logsExporter struct {
@@ -99,7 +96,7 @@ func NewLogsExporter(
 	}
 
 	bs := fromOptions(options...)
-	be, err := newBaseExporter(set, bs, component.DataTypeLogs, newLogsRequestUnmarshalerFunc(pusher))
+	be, err := newBaseExporter(set, bs, component.DataTypeLogs, logsRequestMarshaler{pusher: pusher})
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +127,7 @@ type logsExporterWithObservability struct {
 	nextSender requestSender
 }
 
-func (lewo *logsExporterWithObservability) send(req internal.Request) error {
+func (lewo *logsExporterWithObservability) send(req Request) error {
 	req.SetContext(lewo.obsrep.StartLogsOp(req.Context()))
 	err := lewo.nextSender.send(req)
 	lewo.obsrep.EndLogsOp(req.Context(), req.Count(), err)

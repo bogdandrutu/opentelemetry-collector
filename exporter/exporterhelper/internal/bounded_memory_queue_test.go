@@ -25,21 +25,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
+
+	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
 type stringRequest struct {
-	Request
+	exporterhelper.Request
 	str string
 }
 
-func newStringRequest(str string) Request {
+func newStringRequest(str string) exporterhelper.Request {
 	return stringRequest{str: str}
 }
 
 // In this test we run a queue with capacity 1 and a single consumer.
 // We want to test the overflow behavior, so we block the consumer
 // by holding a startLock before submitting items to the queue.
-func helper(t *testing.T, startConsumers func(q ProducerConsumerQueue, consumerFn func(item Request))) {
+func helper(t *testing.T, startConsumers func(q ProducerConsumerQueue, consumerFn func(item exporterhelper.Request))) {
 	q := NewBoundedMemoryQueue(1)
 
 	var startLock sync.Mutex
@@ -47,7 +49,7 @@ func helper(t *testing.T, startConsumers func(q ProducerConsumerQueue, consumerF
 	startLock.Lock() // block consumers
 	consumerState := newConsumerState(t)
 
-	startConsumers(q, func(item Request) {
+	startConsumers(q, func(item exporterhelper.Request) {
 		consumerState.record(item.(stringRequest).str)
 
 		// block further processing until startLock is released
@@ -98,7 +100,7 @@ func helper(t *testing.T, startConsumers func(q ProducerConsumerQueue, consumerF
 }
 
 func TestBoundedQueue(t *testing.T) {
-	helper(t, func(q ProducerConsumerQueue, consumerFn func(item Request)) {
+	helper(t, func(q ProducerConsumerQueue, consumerFn func(item exporterhelper.Request)) {
 		q.StartConsumers(1, consumerFn)
 	})
 }
@@ -114,7 +116,7 @@ func TestShutdownWhileNotEmpty(t *testing.T) {
 
 	consumerState := newConsumerState(t)
 
-	q.StartConsumers(1, func(item Request) {
+	q.StartConsumers(1, func(item exporterhelper.Request) {
 		consumerState.record(item.(stringRequest).str)
 		time.Sleep(1 * time.Second)
 	})
@@ -196,7 +198,7 @@ func (s *consumerState) assertConsumed(expected map[string]bool) {
 func TestZeroSize(t *testing.T) {
 	q := NewBoundedMemoryQueue(0)
 
-	q.StartConsumers(1, func(item Request) {
+	q.StartConsumers(1, func(item exporterhelper.Request) {
 	})
 
 	assert.False(t, q.Produce(newStringRequest("a"))) // in process
@@ -205,7 +207,7 @@ func TestZeroSize(t *testing.T) {
 func BenchmarkBoundedQueue(b *testing.B) {
 	q := NewBoundedMemoryQueue(1000)
 
-	q.StartConsumers(10, func(item Request) {})
+	q.StartConsumers(10, func(item exporterhelper.Request) {})
 
 	for n := 0; n < b.N; n++ {
 		q.Produce(newStringRequest("a"))
@@ -215,7 +217,7 @@ func BenchmarkBoundedQueue(b *testing.B) {
 func BenchmarkBoundedQueueWithFactory(b *testing.B) {
 	q := NewBoundedMemoryQueue(1000)
 
-	q.StartConsumers(10, func(item Request) {})
+	q.StartConsumers(10, func(item exporterhelper.Request) {})
 
 	for n := 0; n < b.N; n++ {
 		q.Produce(newStringRequest("a"))

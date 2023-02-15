@@ -23,6 +23,7 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
+	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/extension/experimental/storage"
 )
 
@@ -48,18 +49,18 @@ import (
 //	 write          read    x     └── currently dispatched item
 //	 index          index   x
 //	                        xxxx deleted
-type persistentContiguousStorage struct {
-	logger      *zap.Logger
-	queueName   string
-	client      storage.Client
-	unmarshaler RequestUnmarshaler
+type persistentContiguousStorage[K any] struct {
+	logger    *zap.Logger
+	queueName string
+	client    storage.Client
+	marshaler RequestMarshaler[K]
 
 	putChan  chan struct{}
 	stopChan chan struct{}
 	stopOnce sync.Once
 	capacity uint64
 
-	reqChan chan Request
+	reqChan chan K
 
 	mu                       sync.Mutex
 	readIndex                itemIndex
@@ -91,17 +92,17 @@ var (
 // newPersistentContiguousStorage creates a new file-storage extension backed queue;
 // queueName parameter must be a unique value that identifies the queue.
 // The queue needs to be initialized separately using initPersistentContiguousStorage.
-func newPersistentContiguousStorage(ctx context.Context, queueName string, capacity uint64, logger *zap.Logger, client storage.Client, unmarshaler RequestUnmarshaler) *persistentContiguousStorage {
-	pcs := &persistentContiguousStorage{
-		logger:      logger,
-		client:      client,
-		queueName:   queueName,
-		unmarshaler: unmarshaler,
-		capacity:    capacity,
-		putChan:     make(chan struct{}, capacity),
-		reqChan:     make(chan Request),
-		stopChan:    make(chan struct{}),
-		itemsCount:  atomic.NewUint64(0),
+func newPersistentContiguousStorage[K any](ctx context.Context, queueName string, capacity uint64, logger *zap.Logger, client storage.Client, marshaler RequestMarshaler[K]) *persistentContiguousStorage[K] {
+	pcs := &persistentContiguousStorage[K]{
+		logger:     logger,
+		client:     client,
+		queueName:  queueName,
+		marshaler:  marshaler,
+		capacity:   capacity,
+		putChan:    make(chan struct{}, capacity),
+		reqChan:    make(chan K),
+		stopChan:   make(chan struct{}),
+		itemsCount: atomic.NewUint64(0),
 	}
 
 	initPersistentContiguousStorage(ctx, pcs)
@@ -122,7 +123,7 @@ func newPersistentContiguousStorage(ctx context.Context, queueName string, capac
 	return pcs
 }
 
-func initPersistentContiguousStorage(ctx context.Context, pcs *persistentContiguousStorage) {
+func initPersistentContiguousStorage[K any](ctx context.Context, pcs *persistentContiguousStorage[K]) {
 	var writeIndex itemIndex
 	var readIndex itemIndex
 	batch, err := newBatch(pcs).get(readIndexKey, writeIndexKey).execute(ctx)
@@ -153,7 +154,7 @@ func initPersistentContiguousStorage(ctx context.Context, pcs *persistentContigu
 	pcs.itemsCount.Store(uint64(pcs.writeIndex - pcs.readIndex))
 }
 
-func (pcs *persistentContiguousStorage) enqueueNotDispatchedReqs(reqs []Request) {
+func (pcs *persistentContiguousStorage[K]) enqueueNotDispatchedReqs(reqs []K) {
 	if len(reqs) > 0 {
 		errCount := 0
 		for _, req := range reqs {
@@ -176,7 +177,7 @@ func (pcs *persistentContiguousStorage) enqueueNotDispatchedReqs(reqs []Request)
 }
 
 // loop is the main loop that handles fetching items from the persistent buffer
-func (pcs *persistentContiguousStorage) loop() {
+func (pcs *persistentContiguousStorage[K]) loop() {
 	for {
 		select {
 		case <-pcs.stopChan:
@@ -191,16 +192,16 @@ func (pcs *persistentContiguousStorage) loop() {
 }
 
 // get returns the request channel that all the requests will be send on
-func (pcs *persistentContiguousStorage) get() <-chan Request {
+func (pcs *persistentContiguousStorage[K]) get() <-chan K {
 	return pcs.reqChan
 }
 
 // size returns the number of currently available items, which were not picked by consumers yet
-func (pcs *persistentContiguousStorage) size() uint64 {
+func (pcs *persistentContiguousStorage[K]) size() uint64 {
 	return pcs.itemsCount.Load()
 }
 
-func (pcs *persistentContiguousStorage) stop() {
+func (pcs *persistentContiguousStorage[K]) stop() {
 	pcs.logger.Debug("Stopping persistentContiguousStorage", zap.String(zapQueueNameKey, pcs.queueName))
 	pcs.stopOnce.Do(func() {
 		close(pcs.stopChan)
@@ -211,7 +212,7 @@ func (pcs *persistentContiguousStorage) stop() {
 }
 
 // put marshals the request and puts it into the persistent queue
-func (pcs *persistentContiguousStorage) put(req Request) error {
+func (pcs *persistentContiguousStorage[K]) put(req K) error {
 	// Nil requests are ignored
 	if req == nil {
 		return nil
@@ -239,7 +240,7 @@ func (pcs *persistentContiguousStorage) put(req Request) error {
 }
 
 // getNextItem pulls the next available item from the persistent storage; if none is found, returns (nil, false)
-func (pcs *persistentContiguousStorage) getNextItem(ctx context.Context) (Request, bool) {
+func (pcs *persistentContiguousStorage[K]) getNextItem(ctx context.Context) (K, bool) {
 	pcs.mu.Lock()
 	defer pcs.mu.Unlock()
 
@@ -252,7 +253,7 @@ func (pcs *persistentContiguousStorage) getNextItem(ctx context.Context) (Reques
 		pcs.updateReadIndex(ctx)
 		pcs.itemDispatchingStart(ctx, index)
 
-		var req Request
+		var req exporterhelper.Request
 		batch, err := newBatch(pcs).get(pcs.itemKey(index)).execute(ctx)
 		if err == nil {
 			req, err = batch.getRequestResult(pcs.itemKey(index))
@@ -280,8 +281,8 @@ func (pcs *persistentContiguousStorage) getNextItem(ctx context.Context) (Reques
 // retrieveNotDispatchedReqs gets the items for which sending was not finished, cleans the storage
 // and moves the items back to the queue. The function returns an array which might contain nils
 // if unmarshalling of the value at a given index was not possible.
-func (pcs *persistentContiguousStorage) retrieveNotDispatchedReqs(ctx context.Context) []Request {
-	var reqs []Request
+func (pcs *persistentContiguousStorage[K]) retrieveNotDispatchedReqs(ctx context.Context) []K {
+	var reqs []K
 	var dispatchedItems []itemIndex
 
 	pcs.mu.Lock()
@@ -304,7 +305,7 @@ func (pcs *persistentContiguousStorage) retrieveNotDispatchedReqs(ctx context.Co
 		pcs.logger.Debug("No items left for dispatch by consumers")
 	}
 
-	reqs = make([]Request, len(dispatchedItems))
+	reqs = make([]exporterhelper.Request, len(dispatchedItems))
 	keys := make([]string, len(dispatchedItems))
 	retrieveBatch := newBatch(pcs)
 	cleanupBatch := newBatch(pcs)
@@ -349,7 +350,7 @@ func (pcs *persistentContiguousStorage) retrieveNotDispatchedReqs(ctx context.Co
 }
 
 // itemDispatchingStart appends the item to the list of currently dispatched items
-func (pcs *persistentContiguousStorage) itemDispatchingStart(ctx context.Context, index itemIndex) {
+func (pcs *persistentContiguousStorage[K]) itemDispatchingStart(ctx context.Context, index itemIndex) {
 	pcs.currentlyDispatchedItems = append(pcs.currentlyDispatchedItems, index)
 	_, err := newBatch(pcs).
 		setItemIndexArray(currentlyDispatchedItemsKey, pcs.currentlyDispatchedItems).
@@ -361,7 +362,7 @@ func (pcs *persistentContiguousStorage) itemDispatchingStart(ctx context.Context
 }
 
 // itemDispatchingFinish removes the item from the list of currently dispatched items and deletes it from the persistent queue
-func (pcs *persistentContiguousStorage) itemDispatchingFinish(ctx context.Context, index itemIndex) {
+func (pcs *persistentContiguousStorage[K]) itemDispatchingFinish(ctx context.Context, index itemIndex) {
 	var updatedDispatchedItems []itemIndex
 	for _, it := range pcs.currentlyDispatchedItems {
 		if it != index {
@@ -380,7 +381,7 @@ func (pcs *persistentContiguousStorage) itemDispatchingFinish(ctx context.Contex
 	}
 }
 
-func (pcs *persistentContiguousStorage) updateReadIndex(ctx context.Context) {
+func (pcs *persistentContiguousStorage[K]) updateReadIndex(ctx context.Context) {
 	_, err := newBatch(pcs).
 		setItemIndex(readIndexKey, pcs.readIndex).
 		execute(ctx)
@@ -391,6 +392,6 @@ func (pcs *persistentContiguousStorage) updateReadIndex(ctx context.Context) {
 	}
 }
 
-func (pcs *persistentContiguousStorage) itemKey(index itemIndex) string {
+func (pcs *persistentContiguousStorage[K]) itemKey(index itemIndex) string {
 	return strconv.FormatUint(uint64(index), 10)
 }

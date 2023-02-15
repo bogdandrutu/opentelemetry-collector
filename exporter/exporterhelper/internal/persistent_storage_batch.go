@@ -28,16 +28,16 @@ import (
 var errItemIndexArrInvalidDataType = errors.New("invalid data type, expected []itemIndex")
 
 // batchStruct provides convenience capabilities for creating and processing storage extension batches
-type batchStruct struct {
+type batchStruct[K any] struct {
 	logger *zap.Logger
-	pcs    *persistentContiguousStorage
+	pcs    *persistentContiguousStorage[K]
 
 	operations    []storage.Operation
 	getOperations map[string]storage.Operation
 }
 
-func newBatch(pcs *persistentContiguousStorage) *batchStruct {
-	return &batchStruct{
+func newBatch[K any](pcs *persistentContiguousStorage[K]) *batchStruct[K] {
+	return &batchStruct[K]{
 		logger:        pcs.logger,
 		pcs:           pcs,
 		operations:    []storage.Operation{},
@@ -46,7 +46,7 @@ func newBatch(pcs *persistentContiguousStorage) *batchStruct {
 }
 
 // execute runs the provided operations in order
-func (bof *batchStruct) execute(ctx context.Context) (*batchStruct, error) {
+func (bof *batchStruct[K]) execute(ctx context.Context) (*batchStruct[K], error) {
 	err := bof.pcs.client.Batch(ctx, bof.operations...)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (bof *batchStruct) execute(ctx context.Context) (*batchStruct, error) {
 }
 
 // set adds a Set operation to the batch
-func (bof *batchStruct) set(key string, value any, marshal func(any) ([]byte, error)) *batchStruct {
+func (bof *batchStruct[K]) set(key string, value any, marshal func(any) ([]byte, error)) *batchStruct[K] {
 	valueBytes, err := marshal(value)
 	if err != nil {
 		bof.logger.Debug("Failed marshaling item, skipping it", zap.String(zapKey, key), zap.Error(err))
@@ -68,7 +68,7 @@ func (bof *batchStruct) set(key string, value any, marshal func(any) ([]byte, er
 }
 
 // get adds a Get operation to the batch. After executing, its result will be available through getResult
-func (bof *batchStruct) get(keys ...string) *batchStruct {
+func (bof *batchStruct[K]) get(keys ...string) *batchStruct[K] {
 	for _, key := range keys {
 		op := storage.GetOperation(key)
 		bof.getOperations[key] = op
@@ -79,7 +79,7 @@ func (bof *batchStruct) get(keys ...string) *batchStruct {
 }
 
 // delete adds a Delete operation to the batch
-func (bof *batchStruct) delete(keys ...string) *batchStruct {
+func (bof *batchStruct[K]) delete(keys ...string) *batchStruct[K] {
 	for _, key := range keys {
 		bof.operations = append(bof.operations, storage.DeleteOperation(key))
 	}
@@ -89,7 +89,7 @@ func (bof *batchStruct) delete(keys ...string) *batchStruct {
 
 // getResult returns the result of a Get operation for a given key using the provided unmarshal function.
 // It should be called after execute. It may return nil value
-func (bof *batchStruct) getResult(key string, unmarshal func([]byte) (any, error)) (any, error) {
+func (bof *batchStruct[K]) getResult(key string, unmarshal func([]byte) (any, error)) (any, error) {
 	op := bof.getOperations[key]
 	if op == nil {
 		return nil, errKeyNotPresentInBatch
@@ -104,7 +104,7 @@ func (bof *batchStruct) getResult(key string, unmarshal func([]byte) (any, error
 
 // getRequestResult returns the result of a Get operation as a request
 // If the value cannot be retrieved, it returns an error
-func (bof *batchStruct) getRequestResult(key string) (Request, error) {
+func (bof *batchStruct[K]) getRequestResult(key string) (K, error) {
 	reqIf, err := bof.getResult(key, bof.bytesToRequest)
 	if err != nil {
 		return nil, err
@@ -113,12 +113,12 @@ func (bof *batchStruct) getRequestResult(key string) (Request, error) {
 		return nil, errValueNotSet
 	}
 
-	return reqIf.(Request), nil
+	return reqIf.(K), nil
 }
 
 // getItemIndexResult returns the result of a Get operation as an itemIndex
 // If the value cannot be retrieved, it returns an error
-func (bof *batchStruct) getItemIndexResult(key string) (itemIndex, error) {
+func (bof *batchStruct[K]) getItemIndexResult(key string) (itemIndex, error) {
 	itemIndexIf, err := bof.getResult(key, bytesToItemIndex)
 	if err != nil {
 		return itemIndex(0), err
@@ -133,7 +133,7 @@ func (bof *batchStruct) getItemIndexResult(key string) (itemIndex, error) {
 
 // getItemIndexArrayResult returns the result of a Get operation as a itemIndexArray
 // It may return nil value
-func (bof *batchStruct) getItemIndexArrayResult(key string) ([]itemIndex, error) {
+func (bof *batchStruct[K]) getItemIndexArrayResult(key string) ([]itemIndex, error) {
 	itemIndexArrIf, err := bof.getResult(key, bytesToItemIndexArray)
 	if err != nil {
 		return nil, err
@@ -147,17 +147,17 @@ func (bof *batchStruct) getItemIndexArrayResult(key string) ([]itemIndex, error)
 }
 
 // setRequest adds Set operation over a given request to the batch
-func (bof *batchStruct) setRequest(key string, value Request) *batchStruct {
-	return bof.set(key, value, requestToBytes)
+func (bof *batchStruct[K]) setRequest(key string, value K) *batchStruct[K] {
+	return bof.set(key, value, bof.requestToBytes)
 }
 
 // setItemIndex adds Set operation over a given itemIndex to the batch
-func (bof *batchStruct) setItemIndex(key string, value itemIndex) *batchStruct {
+func (bof *batchStruct[K]) setItemIndex(key string, value itemIndex) *batchStruct[K] {
 	return bof.set(key, value, itemIndexToBytes)
 }
 
 // setItemIndexArray adds Set operation over a given itemIndex array to the batch
-func (bof *batchStruct) setItemIndexArray(key string, value []itemIndex) *batchStruct {
+func (bof *batchStruct[K]) setItemIndexArray(key string, value []itemIndex) *batchStruct[K] {
 	return bof.set(key, value, itemIndexArrayToBytes)
 }
 
@@ -217,10 +217,10 @@ func bytesToItemIndexArray(b []byte) (any, error) {
 	return val, err
 }
 
-func requestToBytes(req any) ([]byte, error) {
-	return req.(Request).Marshal()
+func (bof *batchStruct[K]) requestToBytes(req any) ([]byte, error) {
+	return bof.pcs.marshaler.Marshal(req.(K))
 }
 
-func (bof *batchStruct) bytesToRequest(b []byte) (any, error) {
-	return bof.pcs.unmarshaler(b)
+func (bof *batchStruct[K]) bytesToRequest(b []byte) (any, error) {
+	return bof.pcs.marshaler.Unmarshal(b)
 }

@@ -25,21 +25,31 @@ import (
 	"go.opentelemetry.io/collector/extension/experimental/storage"
 )
 
+type RequestMarshaler[K any] interface {
+	// Marshal defines a function which takes a request marshals it into a byte slice.
+	Marshal(K) ([]byte, error)
+	// Unmarshal defines a function which takes a byte slice and unmarshals it into a relevant request
+	Unmarshal([]byte) (K, error)
+}
+
+type stopper interface {
+	stop()
+}
+
 // Monkey patching for unit test
 var (
-	stopStorage = func(queue *persistentQueue) {
-		queue.storage.stop()
+	stopStorage = func(storage stopper) {
+		storage.stop()
 	}
 )
 
 // persistentQueue holds the queue backed by file storage
-type persistentQueue struct {
-	logger     *zap.Logger
+type persistentQueue[K any] struct {
 	stopWG     sync.WaitGroup
 	stopOnce   sync.Once
 	stopChan   chan struct{}
 	numWorkers int
-	storage    *persistentContiguousStorage
+	storage    *persistentContiguousStorage[K]
 }
 
 // buildPersistentStorageName returns a name that is constructed out of queue name and signal type. This is done
@@ -49,16 +59,15 @@ func buildPersistentStorageName(name string, signal component.DataType) string {
 }
 
 // NewPersistentQueue creates a new queue backed by file storage; name and signal must be a unique combination that identifies the queue storage
-func NewPersistentQueue(ctx context.Context, name string, signal component.DataType, capacity int, logger *zap.Logger, client storage.Client, unmarshaler RequestUnmarshaler) ProducerConsumerQueue {
-	return &persistentQueue{
-		logger:   logger,
+func NewPersistentQueue[K any](ctx context.Context, name string, signal component.DataType, capacity int, logger *zap.Logger, client storage.Client, marshaler RequestMarshaler[K]) ProducerConsumerQueue[K] {
+	return &persistentQueue[K]{
 		stopChan: make(chan struct{}),
-		storage:  newPersistentContiguousStorage(ctx, buildPersistentStorageName(name, signal), uint64(capacity), logger, client, unmarshaler),
+		storage:  newPersistentContiguousStorage[K](ctx, buildPersistentStorageName(name, signal), uint64(capacity), logger, client, marshaler),
 	}
 }
 
 // StartConsumers starts the given number of consumers which will be consuming items
-func (pq *persistentQueue) StartConsumers(num int, callback func(item Request)) {
+func (pq *persistentQueue[K]) StartConsumers(num int, callback func(item K)) {
 	pq.numWorkers = num
 
 	for i := 0; i < pq.numWorkers; i++ {
@@ -79,22 +88,22 @@ func (pq *persistentQueue) StartConsumers(num int, callback func(item Request)) 
 }
 
 // Produce adds an item to the queue and returns true if it was accepted
-func (pq *persistentQueue) Produce(item Request) bool {
+func (pq *persistentQueue[K]) Produce(item K) bool {
 	err := pq.storage.put(item)
 	return err == nil
 }
 
 // Stop stops accepting items, shuts down the queue and closes the persistent queue
-func (pq *persistentQueue) Stop() {
+func (pq *persistentQueue[K]) Stop() {
 	pq.stopOnce.Do(func() {
 		// stop the consumers before the storage or the successful processing result will fail to write to persistent storage
 		close(pq.stopChan)
 		pq.stopWG.Wait()
-		stopStorage(pq)
+		stopStorage(pq.storage)
 	})
 }
 
 // Size returns the current depth of the queue, excluding the item already in the storage channel (if any)
-func (pq *persistentQueue) Size() int {
+func (pq *persistentQueue[K]) Size() int {
 	return int(pq.storage.size())
 }

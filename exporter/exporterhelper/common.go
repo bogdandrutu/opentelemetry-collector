@@ -40,28 +40,34 @@ func NewDefaultTimeoutSettings() TimeoutSettings {
 
 // requestSender is an abstraction of a sender for a request independent of the type of the data (traces, metrics, logs).
 type requestSender interface {
-	send(req internal.Request) error
+	send(req Request) error
 }
 
 // baseRequest is a base implementation for the internal.Request.
-type baseRequest struct {
+type baseRequest[K any] struct {
 	ctx                        context.Context
 	processingFinishedCallback func()
+	data                       K
+	pusher                     func(context.Context, K) error
 }
 
-func (req *baseRequest) Context() context.Context {
+func (req *baseRequest[K]) Context() context.Context {
 	return req.ctx
 }
 
-func (req *baseRequest) SetContext(ctx context.Context) {
+func (req *baseRequest[K]) SetContext(ctx context.Context) {
 	req.ctx = ctx
 }
 
-func (req *baseRequest) SetOnProcessingFinished(callback func()) {
+func (req *baseRequest[K]) Export(ctx context.Context) error {
+	return req.pusher(ctx, req.data)
+}
+
+func (req *baseRequest[K]) SetOnProcessingFinished(callback func()) {
 	req.processingFinishedCallback = callback
 }
 
-func (req *baseRequest) OnProcessingFinished() {
+func (req *baseRequest[K]) OnProcessingFinished() {
 	if req.processingFinishedCallback != nil {
 		req.processingFinishedCallback()
 	}
@@ -196,7 +202,7 @@ type timeoutSender struct {
 	cfg TimeoutSettings
 }
 
-func (ts *timeoutSender) send(req internal.Request) error {
+func (ts *timeoutSender) send(req Request) error {
 	// Intentionally don't overwrite the context inside the request, because in case of retries deadline will not be
 	// updated because this deadline most likely is before the next one.
 	ctx := req.Context()

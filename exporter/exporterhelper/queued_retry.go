@@ -170,7 +170,7 @@ func (qrs *queuedRetrySender) initializePersistentQueue(ctx context.Context, hos
 	return nil
 }
 
-func (qrs *queuedRetrySender) onTemporaryFailure(logger *zap.Logger, req internal.Request, err error) error {
+func (qrs *queuedRetrySender) onTemporaryFailure(logger *zap.Logger, req Request, err error) error {
 	if !qrs.requeuingEnabled || qrs.queue == nil {
 		logger.Error(
 			"Exporting failed. No more retries left. Dropping data.",
@@ -201,7 +201,7 @@ func (qrs *queuedRetrySender) start(ctx context.Context, host component.Host) er
 		return err
 	}
 
-	qrs.queue.StartConsumers(qrs.cfg.NumConsumers, func(item internal.Request) {
+	qrs.queue.StartConsumers(qrs.cfg.NumConsumers, func(item K) {
 		_ = qrs.consumerSender.send(item)
 		item.OnProcessingFinished()
 	})
@@ -296,7 +296,7 @@ func createSampledLogger(logger *zap.Logger) *zap.Logger {
 }
 
 // send implements the requestSender interface
-func (qrs *queuedRetrySender) send(req internal.Request) error {
+func (qrs *queuedRetrySender) send(req Request) error {
 	if !qrs.cfg.Enabled {
 		err := qrs.consumerSender.send(req)
 		if err != nil {
@@ -348,7 +348,7 @@ func NewThrottleRetry(err error, delay time.Duration) error {
 	}
 }
 
-type onRequestHandlingFinishedFunc func(*zap.Logger, internal.Request, error) error
+type onRequestHandlingFinishedFunc func(*zap.Logger, Request, error) error
 
 type retrySender struct {
 	traceAttribute     attribute.KeyValue
@@ -360,7 +360,7 @@ type retrySender struct {
 }
 
 // send implements the requestSender interface
-func (rs *retrySender) send(req internal.Request) error {
+func (rs *retrySender) send(req Request) error {
 	if !rs.cfg.Enabled {
 		err := rs.nextSender.send(req)
 		if err != nil {

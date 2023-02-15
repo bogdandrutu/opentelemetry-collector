@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package internal // import "go.opentelemetry.io/collector/exporter/exporterhelper/internal"
+package exporterhelper // import "go.opentelemetry.io/collector/exporter/exporterhelper/internal"
 
 import "context"
 
@@ -33,15 +33,9 @@ type Request interface {
 	// Count returns the count of spans/metric points or log records.
 	Count() int
 
-	// Marshal serializes the current request into a byte stream
-	Marshal() ([]byte, error)
-
 	// OnProcessingFinished calls the optional callback function to handle cleanup after all processing is finished
 	OnProcessingFinished()
 
 	// SetOnProcessingFinished allows to set an optional callback function to do the cleanup (e.g. remove the item from persistent queue)
 	SetOnProcessingFinished(callback func())
 }
-
-// RequestUnmarshaler defines a function which takes a byte slice and unmarshals it into a relevant request
-type RequestUnmarshaler func([]byte) (Request, error)

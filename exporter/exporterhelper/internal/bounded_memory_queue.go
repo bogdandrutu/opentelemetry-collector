@@ -27,19 +27,19 @@ import (
 // the producer force the earliest items to be dropped. The implementation is actually based on
 // channels, with a special Reaper goroutine that wakes up when the queue is full and consumers
 // the items from the top of the queue until its size drops back to maxSize
-type boundedMemoryQueue struct {
+type boundedMemoryQueue[K any] struct {
 	stopWG   sync.WaitGroup
 	size     *atomic.Uint32
 	stopped  *atomic.Bool
-	items    chan Request
+	items    chan K
 	capacity uint32
 }
 
 // NewBoundedMemoryQueue constructs the new queue of specified capacity, and with an optional
 // callback for dropped items (e.g. useful to emit metrics).
-func NewBoundedMemoryQueue(capacity int) ProducerConsumerQueue {
-	return &boundedMemoryQueue{
-		items:    make(chan Request, capacity),
+func NewBoundedMemoryQueue[K any](capacity int) ProducerConsumerQueue[K] {
+	return &boundedMemoryQueue[K]{
+		items:    make(chan K, capacity),
 		stopped:  atomic.NewBool(false),
 		size:     atomic.NewUint32(0),
 		capacity: uint32(capacity),
@@ -48,7 +48,7 @@ func NewBoundedMemoryQueue(capacity int) ProducerConsumerQueue {
 
 // StartConsumers starts a given number of goroutines consuming items from the queue
 // and passing them into the consumer callback.
-func (q *boundedMemoryQueue) StartConsumers(numWorkers int, callback func(item Request)) {
+func (q *boundedMemoryQueue[K]) StartConsumers(numWorkers int, callback func(item K)) {
 	var startWG sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		q.stopWG.Add(1)
@@ -66,7 +66,7 @@ func (q *boundedMemoryQueue) StartConsumers(numWorkers int, callback func(item R
 }
 
 // Produce is used by the producer to submit new item to the queue. Returns false in case of queue overflow.
-func (q *boundedMemoryQueue) Produce(item Request) bool {
+func (q *boundedMemoryQueue[K]) Produce(item K) bool {
 	if q.stopped.Load() {
 		return false
 	}
@@ -91,13 +91,13 @@ func (q *boundedMemoryQueue) Produce(item Request) bool {
 
 // Stop stops all consumers, as well as the length reporter if started,
 // and releases the items channel. It blocks until all consumers have stopped.
-func (q *boundedMemoryQueue) Stop() {
+func (q *boundedMemoryQueue[K]) Stop() {
 	q.stopped.Store(true) // disable producer
 	close(q.items)
 	q.stopWG.Wait()
 }
 
 // Size returns the current size of the queue
-func (q *boundedMemoryQueue) Size() int {
+func (q *boundedMemoryQueue[K]) Size() int {
 	return int(q.size.Load())
 }

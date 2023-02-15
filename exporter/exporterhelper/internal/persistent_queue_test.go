@@ -25,12 +25,13 @@ import (
 	"go.uber.org/zap"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/extension/experimental/storage"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func createTestQueue(extension storage.Extension, capacity int) *persistentQueue {
+func createTestQueue(extension storage.Extension, capacity int) *persistentQueue[ptrace.Traces] {
 	logger := zap.NewNop()
 
 	client, err := extension.GetClient(context.Background(), component.KindReceiver, component.ID{}, "")
@@ -39,7 +40,7 @@ func createTestQueue(extension storage.Extension, capacity int) *persistentQueue
 	}
 
 	wq := NewPersistentQueue(context.Background(), "foo", component.DataTypeTraces, capacity, logger, client, newFakeTracesRequestUnmarshalerFunc())
-	return wq.(*persistentQueue)
+	return wq.(*persistentQueue[ptrace.Traces])
 }
 
 func TestPersistentQueue_Capacity(t *testing.T) {
@@ -52,8 +53,7 @@ func TestPersistentQueue_Capacity(t *testing.T) {
 		wq := createTestQueue(ext, 5)
 		require.Equal(t, 0, wq.Size())
 
-		traces := newTraces(1, 10)
-		req := newFakeTracesRequest(traces)
+		req := newTraces(1, 10)
 
 		for i := 0; i < 10; i++ {
 			result := wq.Produce(req)
@@ -82,10 +82,9 @@ func TestPersistentQueue_Close(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, ext.Shutdown(context.Background())) })
 
 	wq := createTestQueue(ext, 1001)
-	traces := newTraces(1, 10)
-	req := newFakeTracesRequest(traces)
+	req := newTraces(1, 10)
 
-	wq.StartConsumers(100, func(item Request) {})
+	wq.StartConsumers(100, func(item ptrace.Traces) {})
 
 	for i := 0; i < 1000; i++ {
 		wq.Produce(req)
@@ -120,12 +119,12 @@ func TestPersistentQueue_Close_StorageCloseAfterConsumers(t *testing.T) {
 
 	fnBefore := stopStorage
 	stopStorageTime := time.Now()
-	stopStorage = func(queue *persistentQueue) {
+	stopStorage = func(queue stopper) {
 		stopStorageTime = time.Now()
-		queue.storage.stop()
+		queue.stop()
 	}
 
-	wq.StartConsumers(1, func(item Request) {})
+	wq.StartConsumers(1, func(item exporterhelper.Request) {})
 
 	for i := 0; i < 1000; i++ {
 		wq.Produce(req)
@@ -179,7 +178,7 @@ func TestPersistentQueue_ConsumersProducers(t *testing.T) {
 			t.Cleanup(func() { require.NoError(t, ext.Shutdown(context.Background())) })
 
 			numMessagesConsumed := atomic.NewInt32(0)
-			tq.StartConsumers(c.numConsumers, func(item Request) {
+			tq.StartConsumers(c.numConsumers, func(item exporterhelper.Request) {
 				if item != nil {
 					numMessagesConsumed.Inc()
 				}

@@ -35,7 +35,7 @@ type metricsRequest struct {
 	pusher consumer.ConsumeMetricsFunc
 }
 
-func newMetricsRequest(ctx context.Context, md pmetric.Metrics, pusher consumer.ConsumeMetricsFunc) internal.Request {
+func newMetricsRequest(ctx context.Context, md pmetric.Metrics, pusher consumer.ConsumeMetricsFunc) Request {
 	return &metricsRequest{
 		baseRequest: baseRequest{ctx: ctx},
 		md:          md,
@@ -44,7 +44,7 @@ func newMetricsRequest(ctx context.Context, md pmetric.Metrics, pusher consumer.
 }
 
 func newMetricsRequestUnmarshalerFunc(pusher consumer.ConsumeMetricsFunc) internal.RequestUnmarshaler {
-	return func(bytes []byte) (internal.Request, error) {
+	return func(bytes []byte) (Request, error) {
 		metrics, err := metricsUnmarshaler.UnmarshalMetrics(bytes)
 		if err != nil {
 			return nil, err
@@ -53,7 +53,7 @@ func newMetricsRequestUnmarshalerFunc(pusher consumer.ConsumeMetricsFunc) intern
 	}
 }
 
-func (req *metricsRequest) OnError(err error) internal.Request {
+func (req *metricsRequest) OnError(err error) Request {
 	var metricsError consumererror.Metrics
 	if errors.As(err, &metricsError) {
 		return newMetricsRequest(req.ctx, metricsError.GetMetrics(), req.pusher)
@@ -131,7 +131,7 @@ type metricsSenderWithObservability struct {
 	nextSender requestSender
 }
 
-func (mewo *metricsSenderWithObservability) send(req internal.Request) error {
+func (mewo *metricsSenderWithObservability) send(req Request) error {
 	req.SetContext(mewo.obsrep.StartMetricsOp(req.Context()))
 	err := mewo.nextSender.send(req)
 	mewo.obsrep.EndMetricsOp(req.Context(), req.Count(), err)

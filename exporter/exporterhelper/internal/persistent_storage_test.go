@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/extension/experimental/storage"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
@@ -56,7 +57,7 @@ func createTestPersistentStorage(client storage.Client) *persistentContiguousSto
 type fakeTracesRequest struct {
 	td                         ptrace.Traces
 	processingFinishedCallback func()
-	Request
+	exporterhelper.Request
 }
 
 func newFakeTracesRequest(td ptrace.Traces) *fakeTracesRequest {
@@ -80,8 +81,8 @@ func (fd *fakeTracesRequest) SetOnProcessingFinished(callback func()) {
 	fd.processingFinishedCallback = callback
 }
 
-func newFakeTracesRequestUnmarshalerFunc() RequestUnmarshaler {
-	return func(bytes []byte) (Request, error) {
+func newFakeTracesRequestUnmarshalerFunc() RequestMarshaler[ptrace.Traces] {
+	return func(bytes []byte) (exporterhelper.Request, error) {
 		unmarshaler := ptrace.ProtoUnmarshaler{}
 		traces, err := unmarshaler.UnmarshalTraces(bytes)
 		if err != nil {
@@ -431,8 +432,8 @@ func TestPersistentStorage_StopShouldCloseClient(t *testing.T) {
 	require.Equal(t, uint64(1), castedClient.getCloseCount())
 }
 
-func getItemFromChannel(t *testing.T, pcs *persistentContiguousStorage) Request {
-	var readReq Request
+func getItemFromChannel(t *testing.T, pcs *persistentContiguousStorage) exporterhelper.Request {
+	var readReq exporterhelper.Request
 	require.Eventually(t, func() bool {
 		readReq = <-pcs.get()
 		return true
