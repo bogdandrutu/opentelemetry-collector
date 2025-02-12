@@ -223,23 +223,44 @@ func (e *baseExporter) export(ctx context.Context, url string, request []byte, p
 	formattedErr = httphelper.NewStatusFromMsgAndHTTPCode(errString, resp.StatusCode).Err()
 
 	if isRetryableStatusCode(resp.StatusCode) {
-		// A retry duration of 0 seconds will trigger the default backoff policy
-		// of our caller (retry handler).
-		retryAfter := 0
-
 		// Check if the server is overwhelmed.
 		// See spec https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/protocol/otlp.md#otlphttp-throttling
 		isThrottleError := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable
-		if val := resp.Header.Get(headerRetryAfter); isThrottleError && val != "" {
-			if seconds, err2 := strconv.Atoi(val); err2 == nil {
-				retryAfter = seconds
+		if isThrottleError {
+			// A retry duration of 0 seconds will trigger the default backoff policy of our caller (retry handler).
+			throttleDuration := getRetryAfterSeconds(resp)
+			if throttleDuration != 0 {
+				return exporterhelper.NewThrottleRetry(formattedErr, getRetryAfterSeconds(resp))
 			}
+			return formattedErr
 		}
 
-		return exporterhelper.NewThrottleRetry(formattedErr, time.Duration(retryAfter)*time.Second)
+		return formattedErr
 	}
 
 	return consumererror.NewPermanent(formattedErr)
+}
+
+func getRetryAfterSeconds(resp *http.Response) time.Duration {
+	val := resp.Header.Get(headerRetryAfter)
+	if val == "" {
+		return 0
+	}
+
+	// The value of Retry-After field can be either an HTTP-date or a number of
+	// seconds to delay after the response is received. See https://datatracker.ietf.org/doc/html/rfc7231#section-7.1.3
+	//
+	// Retry-After = HTTP-date / delay-seconds
+	//
+	// First try to parse delay-seconds, since that is what the receiver will send.
+	if seconds, err := strconv.Atoi(val); err == nil {
+		return time.Duration(seconds) * time.Second
+	}
+	if date, err := time.Parse(time.RFC1123, val); err == nil {
+		return time.Until(date)
+	}
+
+	return 0
 }
 
 // Determine if the status code is retryable according to the specification.
