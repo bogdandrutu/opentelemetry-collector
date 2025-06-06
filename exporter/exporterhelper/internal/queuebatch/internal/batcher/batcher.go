@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package queuebatch // import "go.opentelemetry.io/collector/exporter/exporterhelper/internal/queuebatch"
+package batcher // import "go.opentelemetry.io/collector/exporter/exporterhelper/internal/queuebatch"
 
 import (
 	"context"
@@ -25,7 +25,7 @@ type batcherSettings[T any] struct {
 	maxWorkers  int
 }
 
-func NewBatcher(cfg *BatchConfig, set batcherSettings[request.Request]) Batcher[request.Request] {
+func NewBatcher(cfg *Config, set batcherSettings[request.Request]) Batcher[request.Request] {
 	if cfg == nil {
 		return newDisabledBatcher[request.Request](set.next)
 	}

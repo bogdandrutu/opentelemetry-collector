@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package queuebatch
+package batcher
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 )
 
 func TestMultiBatcher_NoTimeout(t *testing.T) {
-	cfg := BatchConfig{
+	cfg := Config{
 		FlushTimeout: 0,
 		MinSize:      10,
 	}
@@ -68,7 +68,7 @@ func TestMultiBatcher_NoTimeout(t *testing.T) {
 }
 
 func TestMultiBatcher_Timeout(t *testing.T) {
-	cfg := BatchConfig{
+	cfg := Config{
 		FlushTimeout: 100 * time.Millisecond,
 		MinSize:      100,
 	}

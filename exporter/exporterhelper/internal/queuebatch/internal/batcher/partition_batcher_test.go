@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package queuebatch
+package batcher
 
 import (
 	"context"
@@ -53,7 +53,7 @@ func TestPartitionBatcher_NoSplit_MinThresholdZero_TimeoutDisabled(t *testing.T)
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := BatchConfig{
+			cfg := Config{
 				FlushTimeout: 0,
 				MinSize:      0,
 			}
@@ -118,7 +118,7 @@ func TestPartitionBatcher_NoSplit_TimeoutDisabled(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := BatchConfig{
+			cfg := Config{
 				FlushTimeout: 0,
 				MinSize:      10,
 			}
@@ -198,7 +198,7 @@ func TestPartitionBatcher_NoSplit_WithTimeout(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := BatchConfig{
+			cfg := Config{
 				FlushTimeout: 50 * time.Millisecond,
 				MinSize:      100,
 			}
@@ -268,7 +268,7 @@ func TestPartitionBatcher_Split_TimeoutDisabled(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := BatchConfig{
+			cfg := Config{
 				FlushTimeout: 0,
 				MinSize:      100,
 				MaxSize:      100,
@@ -316,7 +316,7 @@ func TestPartitionBatcher_Split_TimeoutDisabled(t *testing.T) {
 }
 
 func TestPartitionBatcher_Shutdown(t *testing.T) {
-	cfg := BatchConfig{
+	cfg := Config{
 		FlushTimeout: 100 * time.Second,
 		MinSize:      10,
 	}
@@ -343,7 +343,7 @@ func TestPartitionBatcher_Shutdown(t *testing.T) {
 }
 
 func TestPartitionBatcher_MergeError(t *testing.T) {
-	cfg := BatchConfig{
+	cfg := Config{
 		FlushTimeout: 200 * time.Second,
 		MinSize:      5,
 		MaxSize:      7,

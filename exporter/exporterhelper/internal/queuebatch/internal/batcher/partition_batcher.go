@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package queuebatch // import "go.opentelemetry.io/collector/exporter/exporterhelper/internal/queuebatch"
+package batcher // import "go.opentelemetry.io/collector/exporter/exporterhelper/internal/queuebatch"
 
 import (
 	"context"
@@ -25,7 +25,7 @@ type batch struct {
 
 // partitionBatcher continuously batch incoming requests and flushes asynchronously if minimum size limit is met or on timeout.
 type partitionBatcher struct {
-	cfg            BatchConfig
+	cfg            Config
 	wp             *workerPool
 	sizerType      request.SizerType
 	sizer          request.Sizer[request.Request]
@@ -38,7 +38,7 @@ type partitionBatcher struct {
 }
 
 func newPartitionBatcher(
-	cfg BatchConfig,
+	cfg Config,
 	sizerType request.SizerType,
 	sizer request.Sizer[request.Request],
 	wp *workerPool,

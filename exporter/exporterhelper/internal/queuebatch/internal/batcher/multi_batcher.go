@@ -1,7 +1,8 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package queuebatch // import "go.opentelemetry.io/collector/exporter/exporterhelper/internal/queuebatch"
+package batcher // import "go.opentelemetry.io/collector/exporter/exporterhelper/internal/queuebatch"
+
 import (
 	"context"
 	"sync"
@@ -14,7 +15,7 @@ import (
 var _ Batcher[request.Request] = (*multiBatcher)(nil)
 
 type multiBatcher struct {
-	cfg         BatchConfig
+	cfg         Config
 	wp          *workerPool
 	sizerType   request.SizerType
 	sizer       request.Sizer[request.Request]
@@ -24,7 +25,7 @@ type multiBatcher struct {
 }
 
 func newMultiBatcher(
-	bCfg BatchConfig,
+	bCfg Config,
 	sizerType request.SizerType,
 	sizer request.Sizer[request.Request],
 	wp *workerPool,
