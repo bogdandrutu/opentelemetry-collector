@@ -23,7 +23,7 @@ jobs:
     name: Check
     # This condition is to avoid blocking the PR causing the freeze in the first place.
     if: |
-      (!startsWith(github.event.pull_request.title || github.event.merge_group.head_commit.message, '[chore] Prepare release')) ||
+      (!startsWith(github.event.pull_request.title, '[chore] Prepare release')) ||
       (!(github.event.pull_request.user.login == 'otelbot[bot]' || github.event.merge_group.head_commit.author.login == 'otelbot[bot]'))
     runs-on: ubuntu-latest
     steps:
