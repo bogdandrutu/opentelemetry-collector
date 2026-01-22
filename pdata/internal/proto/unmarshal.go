@@ -69,14 +69,14 @@ func ConsumeUnknown(buf []byte, pos int, wireType WireType) (int, error) {
 			return 0, err
 		}
 	}
-	return 0, io.ErrUnexpectedEOF
+	return 0, fmt.Errorf("failed in ConsumeUnknown: %w", io.ErrUnexpectedEOF)
 }
 
 // ConsumeI64 parses buf starting at pos as a WireTypeI64 field, reporting the value and the new position.
 func ConsumeI64(buf []byte, pos int) (uint64, int, error) {
 	pos += 8
 	if pos < 0 || pos > len(buf) {
-		return 0, 0, io.ErrUnexpectedEOF
+		return 0, 0, fmt.Errorf("failed in ConsumeUnknown: %w", io.ErrUnexpectedEOF)
 	}
 	return binary.LittleEndian.Uint64(buf[pos-8:]), pos, nil
 }
@@ -95,7 +95,7 @@ func ConsumeLen(buf []byte, pos int) (int, int, error) {
 	}
 	pos += length
 	if pos < 0 || pos > len(buf) {
-		return 0, 0, io.ErrUnexpectedEOF
+		return length, pos, fmt.Errorf("failed in ConsumeLen: %w", io.ErrUnexpectedEOF)
 	}
 	return length, pos, nil
 }
@@ -104,7 +104,7 @@ func ConsumeLen(buf []byte, pos int) (int, int, error) {
 func ConsumeI32(buf []byte, pos int) (uint32, int, error) {
 	pos += 4
 	if pos < 0 || pos > len(buf) {
-		return 0, 0, io.ErrUnexpectedEOF
+		return 0, 0, fmt.Errorf("failed in ConsumeI32: %w", io.ErrUnexpectedEOF)
 	}
 	return binary.LittleEndian.Uint32(buf[pos-4:]), pos, nil
 }
@@ -132,7 +132,7 @@ func ConsumeVarint(buf []byte, pos int) (uint64, int, error) {
 			return 0, 0, ErrIntOverflow
 		}
 		if pos >= l {
-			return 0, 0, io.ErrUnexpectedEOF
+			return 0, 0, fmt.Errorf("failed in ConsumeVarint: %w", io.ErrUnexpectedEOF)
 		}
 		b := buf[pos]
 		pos++

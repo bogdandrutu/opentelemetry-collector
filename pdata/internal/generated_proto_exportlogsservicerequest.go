@@ -208,7 +208,7 @@ func (orig *ExportLogsServiceRequest) UnmarshalProto(buf []byte) error {
 			orig.ResourceLogs = append(orig.ResourceLogs, NewResourceLogs())
 			err = orig.ResourceLogs[len(orig.ResourceLogs)-1].UnmarshalProto(buf[startPos:pos])
 			if err != nil {
-				return err
+				return fmt.Errorf("failed in ExportLogsServiceRequest: %w", err)
 			}
 		default:
 			pos, err = proto.ConsumeUnknown(buf, pos, wireType)

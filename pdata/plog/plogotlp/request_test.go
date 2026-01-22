@@ -4,7 +4,10 @@
 package plogotlp
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -94,4 +97,52 @@ func TestLogsProtoWireCompatibility(t *testing.T) {
 	// Migration logic will run, so run it on the original message as well.
 	otlp.MigrateLogs(ld.orig.ResourceLogs)
 	assert.Equal(t, ld, ld2)
+}
+
+func TestRequestProtoUnmarshalBad(t *testing.T) {
+	bufBase64, err := os.ReadFile(filepath.Join("testdata", "proto_byte64"))
+	require.NoError(t, err)
+
+	buf := make([]byte, base64.StdEncoding.DecodedLen(len(bufBase64)))
+	_, err = base64.StdEncoding.Decode(buf, bufBase64)
+	require.NoError(t, err)
+
+	// t.Log(string(buf))
+
+	lr := NewExportRequest()
+	assert.NoError(t, lr.UnmarshalProto(buf))
+
+	t.Log(lr.Logs().LogRecordCount())
+}
+
+func TestRequestProtoUnmarshalBad2(t *testing.T) {
+	bufBase64, err := os.ReadFile(filepath.Join("testdata", "proto_illegal_wire_type"))
+	require.NoError(t, err)
+
+	buf := make([]byte, base64.StdEncoding.DecodedLen(len(bufBase64)))
+	_, err = base64.StdEncoding.Decode(buf, bufBase64)
+	require.NoError(t, err)
+
+	// t.Log(string(buf))
+
+	lr := NewExportRequest()
+	assert.NoError(t, lr.UnmarshalProto(buf))
+	t.Log(lr.Logs().LogRecordCount())
+}
+
+func TestRequestProtoUnmarshalBad3(t *testing.T) {
+	bufBase64, err := os.ReadFile(filepath.Join("testdata", "proto_local"))
+	require.NoError(t, err)
+
+	buf := make([]byte, base64.StdEncoding.DecodedLen(len(bufBase64)))
+	_, err = base64.StdEncoding.Decode(buf, bufBase64)
+	require.NoError(t, err)
+
+	t.Log(string(buf[0:300]))
+
+	// t.Log(string(buf))
+
+	lr := NewExportRequest()
+	assert.NoError(t, lr.UnmarshalProto(buf))
+	t.Log(lr.Logs().LogRecordCount())
 }

@@ -230,7 +230,7 @@ func (orig *ScopeLogs) UnmarshalProto(buf []byte) error {
 		// If in a group parsing, move to the next tag.
 		fieldNum, wireType, pos, err = proto.ConsumeTag(buf, pos)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed begining: %w", err)
 		}
 		switch fieldNum {
 
@@ -241,13 +241,13 @@ func (orig *ScopeLogs) UnmarshalProto(buf []byte) error {
 			var length int
 			length, pos, err = proto.ConsumeLen(buf, pos)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed in id=1, len: %w", err)
 			}
 			startPos := pos - length
 
 			err = orig.Scope.UnmarshalProto(buf[startPos:pos])
 			if err != nil {
-				return err
+				return fmt.Errorf("failed in id=1: %w", err)
 			}
 
 		case 2:
@@ -257,13 +257,13 @@ func (orig *ScopeLogs) UnmarshalProto(buf []byte) error {
 			var length int
 			length, pos, err = proto.ConsumeLen(buf, pos)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed in id=2, len: %w", err)
 			}
 			startPos := pos - length
 			orig.LogRecords = append(orig.LogRecords, NewLogRecord())
 			err = orig.LogRecords[len(orig.LogRecords)-1].UnmarshalProto(buf[startPos:pos])
 			if err != nil {
-				return err
+				return fmt.Errorf("failed in id=2: %w", err)
 			}
 
 		case 3:
@@ -273,14 +273,14 @@ func (orig *ScopeLogs) UnmarshalProto(buf []byte) error {
 			var length int
 			length, pos, err = proto.ConsumeLen(buf, pos)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed in id=3, len: %w", err)
 			}
 			startPos := pos - length
 			orig.SchemaUrl = string(buf[startPos:pos])
 		default:
 			pos, err = proto.ConsumeUnknown(buf, pos, wireType)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed in unknown: %w", err)
 			}
 		}
 	}

@@ -8,6 +8,7 @@ package internal
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"go.opentelemetry.io/collector/pdata/internal/json"
@@ -288,16 +289,32 @@ func (orig *ResourceLogs) UnmarshalProto(buf []byte) error {
 			if wireType != proto.WireTypeLen {
 				return fmt.Errorf("proto: wrong wireType = %d for field ScopeLogs", wireType)
 			}
-			var length int
-			length, pos, err = proto.ConsumeLen(buf, pos)
-			if err != nil {
-				return err
+			switch len(orig.ScopeLogs){
+			case 1, 606, 607, 1297, 1298:
+				var length int
+				length, pos, err = proto.ConsumeLen(buf, pos)
+				if err != nil {
+					return err
+				}
+				startPos := pos - length
+				orig.ScopeLogs = append(orig.ScopeLogs, NewScopeLogs())
+				newBuf := buf[startPos:pos]
+				log.Printf("startPos=%d length=%d\n", startPos, length)
+				log.Println(string(buf[startPos-40:startPos+80]))
+				log.Printf("% 02X", buf[startPos-40:startPos+30])
+				err = orig.ScopeLogs[len(orig.ScopeLogs)-1].UnmarshalProto(newBuf)
+			default:
+				var length int
+				length, pos, err = proto.ConsumeLen(buf, pos)
+				if err != nil {
+					return err
+				}
+				startPos := pos - length
+				orig.ScopeLogs = append(orig.ScopeLogs, NewScopeLogs())
+				err = orig.ScopeLogs[len(orig.ScopeLogs)-1].UnmarshalProto(buf[startPos:pos])
 			}
-			startPos := pos - length
-			orig.ScopeLogs = append(orig.ScopeLogs, NewScopeLogs())
-			err = orig.ScopeLogs[len(orig.ScopeLogs)-1].UnmarshalProto(buf[startPos:pos])
 			if err != nil {
-				return err
+				return fmt.Errorf("failed in ResourceLogs: %w",  err)
 			}
 
 		case 3:
